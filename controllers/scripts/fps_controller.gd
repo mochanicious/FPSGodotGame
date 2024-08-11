@@ -1,13 +1,16 @@
 extends CharacterBody3D
 
-@export var SPEED : float = 5.0
+@export var SPEED_DEFAULT : float = 5.0
+@export var SPEED_CROUCH : float = 2.0
 @export var JUMP_VELOCITY : float = 4.5
 @export var MOUSE_SENSITIVITY : float = 0.5
 @export var TILT_LOWER_LIMIT := deg_to_rad(-90.0)
 @export var TILT_UPPER_LIMIT := deg_to_rad(90.0)
 @export var CAMERA_CONTROLLER : Camera3D
 @export var ANIMATIONPLAYER : AnimationPlayer
+@export var CROUCH_SHAPECAST : Node3D
 
+var _speed : float
 var _mouse_input : bool = false
 var _rotation_input : float
 var _tilt_input : float
@@ -32,9 +35,9 @@ func _input(event):
 	if event.is_action_pressed("exit"):
 		get_tree().quit()
 		
-	if event.is_action_pressed("Crouch"):
+	if event.is_action_pressed("Crouch") and is_on_floor():
 		toggle_crouch()
-		
+
 func _update_camera(delta):
 	
 	# Rotates camera using euler rotation
@@ -57,6 +60,10 @@ func _ready():
 
 	# Get mouse input
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	
+	_speed = SPEED_DEFAULT
+	
+	CROUCH_SHAPECAST.add_exception($".")
 
 func _physics_process(delta):
 	
@@ -68,7 +75,7 @@ func _physics_process(delta):
 		velocity.y -= gravity * delta
 
 	# Handle Jump.
-	if Input.is_action_just_pressed("jump") and is_on_floor():
+	if Input.is_action_just_pressed("jump") and is_on_floor() and _is_crouching == false:
 		velocity.y = JUMP_VELOCITY
 
 	# Get the input direction and handle the movement/deceleration.
@@ -78,17 +85,26 @@ func _physics_process(delta):
 	var direction = (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
 	
 	if direction:
-		velocity.x = direction.x * SPEED
-		velocity.z = direction.z * SPEED
+		velocity.x = direction.x * _speed
+		velocity.z = direction.z * _speed
 	else:
-		velocity.x = move_toward(velocity.x, 0, SPEED)
-		velocity.z = move_toward(velocity.z, 0, SPEED)
+		velocity.x = move_toward(velocity.x, 0, _speed)
+		velocity.z = move_toward(velocity.z, 0, _speed)
 
 	move_and_slide()
 
 func toggle_crouch():
-	if _is_crouching == true:
+	if _is_crouching == true and CROUCH_SHAPECAST.is_colliding() == false:
 		ANIMATIONPLAYER.play("uncrouch")
+		set_speed("default")
 	elif _is_crouching == false:
 		ANIMATIONPLAYER.play("crouch")
+		set_speed("crouching")
 	_is_crouching = !_is_crouching
+
+func set_speed(state: String):
+	match state:
+		"default":
+			_speed = SPEED_DEFAULT
+		"crouching":
+			_speed = SPEED_CROUCH
